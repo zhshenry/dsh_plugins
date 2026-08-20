@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm test
+      # The bundle is assembled by a build step that rewrites import paths, so a
+      # break there would otherwise only surface at release time.
+      - run: pnpm run pack:release
+      - name: Verify the packed bundle is complete
+        run: |
+          tarball=$(ls dist/veang-workbench-*.tgz)
+          for entry in embedded/layout/index.js embedded/ui/index.js vendor/xlsx.mjs; do
+            tar tzf "$tarball" | grep -qx "package/$entry" || { echo "missing $entry"; exit 1; }
+          done
+          tar xzOf "$tarball" package/embedded/ui/index.js | grep -q "vendor/xlsx.mjs" \
+            || { echo "vendored xlsx import was not rewritten"; exit 1; }

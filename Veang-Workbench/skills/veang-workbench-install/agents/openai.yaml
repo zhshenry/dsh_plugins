@@ -1,0 +1,4 @@
+interface:
+  display_name: "Veang Workbench 安装"
+  short_description: "Install DSH and Veang Workbench from public npm packages"
+  default_prompt: "Use $veang-workbench-install to install and verify DSH with Veang Workbench."

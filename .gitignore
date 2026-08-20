@@ -1,0 +1,10 @@
+# 临时视觉工具产物（截图等），不入库
+.dsh-vision-toolkit/
+
+# pnpm 本地缓存，不入库
+.pnpm-store/
+
+# 依赖与构建产物
+node_modules/
+dist/
+*.tgz
