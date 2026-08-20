@@ -1,0 +1,15 @@
+# Disable the stock shell before loading the workbench shell.
+- id: ui-layout
+  disabled: true
+
+# The stock workspace surface is a session browser; this plugin owns the
+# workspace slot and moves session switching into the conversation header.
+- id: ui-workspace
+  disabled: true
+
+- insert:
+    - id: veang-layout
+      name: veang-workbench/layout
+
+    - id: veang-ui
+      name: veang-workbench/ui
