@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-DSH_VERSION="0.1.0-rc.6"
-WEB_APP_VERSION="0.1.0-rc.6"
+DSH_VERSION="0.1.0-rc.7"
+WEB_APP_VERSION="0.1.0-rc.7"
 WORKBENCH_VERSION="0.1.0"
 MODE="check"
 TARGET_HOME="$HOME"
