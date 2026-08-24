@@ -6,4 +6,4 @@ The single installable Cordis bundle for Veang Workbench. It embeds the layout a
 dsh plugin --profile web add veang-workbench
 ```
 
-Compatible with DeepSeek Harness `0.1.0-rc.6`.
+Compatible with DeepSeek Harness `0.1.0-rc.8`.

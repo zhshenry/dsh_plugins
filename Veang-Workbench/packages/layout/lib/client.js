@@ -46,14 +46,14 @@ window.__ModuleLoader__.load({
 		* @returns resolved widths; right 0 means visually closed (kept mounted), while a closed sidebar keeps its compact rail.
 		*/
 		function computeColumns(viewport, sidebar, right) {
-			const s = sidebar === 0 ? 56 : clampWidth(sidebar, 232, 640);
-			const r0 = right === 0 ? 0 : clampWidth(right, 280, 720);
+			const s = sidebar === 0 ? 56 : clampWidth(sidebar, 264, 420);
+			const r0 = right === 0 ? 0 : clampWidth(right, 360, 960);
 			if (s + r0 + 420 <= viewport) return {
 				sidebar: s,
 				center: viewport - s - r0,
 				right: r0
 			};
-			const r1 = r0 === 0 ? 0 : Math.max(280, viewport - s - 420);
+			const r1 = r0 === 0 ? 0 : Math.max(360, viewport - s - 420);
 			if (s + r1 + 420 <= viewport) return {
 				sidebar: s,
 				center: 420,
@@ -80,13 +80,22 @@ window.__ModuleLoader__.load({
 		// column, the middle column is a plugin-owned workspace, and the existing
 		// tool details surface overlays the workspace instead of opening a fourth
 		// column.
-		const workspaceShellCss = ".pI_x6G_workspaceCol{background:var(--dsw-alias-bg-base);position:relative;min-width:0;display:flex;flex-direction:column;overflow:hidden}.pI_x6G_rightCol{background:var(--dsw-alias-bg-base);border-left:1px solid var(--dsw-alias-border-l2);min-width:0;display:flex;flex-direction:column;overflow:hidden;position:relative}.pI_x6G_frame[data-right-collapsed] .pI_x6G_rightCol{border-left:0}.pI_x6G_historySlot{position:absolute;z-index:16;top:10px;right:12px;pointer-events:none}.pI_x6G_historySlot>*{pointer-events:auto}.pI_x6G_detailsOverlay{position:absolute;inset:0;z-index:10;background:var(--dsw-alias-bg-base);display:flex;flex-direction:column;overflow:hidden}.pI_x6G_detailsOverlay[data-closed]{visibility:hidden;pointer-events:none}.pI_x6G_handle[data-side=sidebar],.pI_x6G_handle[data-side=right]{width:14px;margin-left:-7px}.pI_x6G_handle[data-side=sidebar]:after,.pI_x6G_handle[data-side=right]:after{content:\"\";box-sizing:border-box;background:var(--dsw-alias-button-floating-fill);border:1px solid var(--dsw-alias-border-l2-darkmode-thin);opacity:.48;width:8px;height:52px;transition:opacity 160ms ease-out,background 160ms ease-out,border-color 160ms ease-out;border-radius:10px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}.pI_x6G_handle[data-side=sidebar]:hover:after,.pI_x6G_handle[data-side=sidebar][data-dragging=true]:after,.pI_x6G_handle[data-side=right]:hover:after,.pI_x6G_handle[data-side=right][data-dragging=true]:after{opacity:1;background:var(--dsw-alias-button-floating-hover);border-color:var(--dsw-alias-border-l3)}.pI_x6G_rightToggle{position:absolute;z-index:12;top:14px;width:28px;height:28px;border:0;border-radius:50%;background:transparent;color:var(--dsw-alias-label-secondary);display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:none;transition:right var(--ds-transition-duration-slow) var(--ds-ease-in-out),background-color 140ms ease,color 140ms ease,transform 140ms cubic-bezier(.23,1,.32,1)}.pI_x6G_rightToggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.pI_x6G_rightToggle:active{transform:scale(.96)}.pI_x6G_rightPanelIcon{display:block;transform:scaleX(-1)}";
+		const workspaceShellCss = ".pI_x6G_workspaceCol{background:var(--dsw-alias-bg-base);position:relative;min-width:0;display:flex;flex-direction:column;overflow:hidden}.pI_x6G_rightCol{background:var(--dsw-alias-bg-base);border-left:1px solid var(--dsw-alias-border-l2);min-width:0;display:flex;flex-direction:column;overflow:hidden;position:relative}.pI_x6G_frame[data-right-collapsed] .pI_x6G_rightCol{border-left:0}.pI_x6G_historySlot{position:absolute;z-index:16;top:10px;right:12px;pointer-events:none}.pI_x6G_historySlot>*{pointer-events:auto}.pI_x6G_detailsOverlay{position:absolute;inset:0;z-index:10;background:var(--dsw-alias-bg-base);display:flex;flex-direction:column;overflow:hidden}.pI_x6G_detailsOverlay[data-closed]{visibility:hidden;pointer-events:none}.pI_x6G_handle[data-side=sidebar],.pI_x6G_handle[data-side=right]{width:14px;margin-left:-7px}.pI_x6G_handle[data-side=sidebar]:after,.pI_x6G_handle[data-side=right]:after{content:\"\";box-sizing:border-box;background:var(--dsw-alias-button-floating-fill);border:1px solid var(--dsw-alias-border-l2-darkmode-thin);opacity:.48;width:8px;height:52px;transition:opacity 160ms ease-out,background 160ms ease-out,border-color 160ms ease-out;border-radius:10px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}.pI_x6G_handle[data-side=sidebar]:hover:after,.pI_x6G_handle[data-side=sidebar][data-dragging=true]:after,.pI_x6G_handle[data-side=right]:hover:after,.pI_x6G_handle[data-side=right][data-dragging=true]:after{opacity:1;background:var(--dsw-alias-button-floating-hover);border-color:var(--dsw-alias-border-l3)}.pI_x6G_rightToggle{position:absolute;z-index:12;top:60px;width:28px;height:28px;border:0;border-radius:50%;background:transparent;color:var(--dsw-alias-label-secondary);display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:none;transition:right var(--ds-transition-duration-slow) var(--ds-ease-in-out),background-color 140ms ease,color 140ms ease,transform 140ms cubic-bezier(.23,1,.32,1)}.pI_x6G_rightToggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.pI_x6G_rightToggle:active{transform:scale(.96)}.pI_x6G_rightPanelIcon{display:block;transform:scaleX(-1)}";
 		const workspaceShellTagId = "veang-workbench-layout/workspace-shell.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(workspaceShellTagId) + "]") === null) {
 			const tag = document.createElement("style");
 			tag.dataset.plugin = "veang-workbench-layout";
 			tag.dataset.pluginCss = workspaceShellTagId;
 			tag.textContent = workspaceShellCss;
+			document.head.appendChild(tag);
+		}
+		const workbenchCss = ".pI_x6G_workbenchCol{background:var(--dsw-alias-bg-base);border-left:1px solid var(--dsw-alias-border-l2);min-width:0;display:flex;flex-direction:column;overflow:hidden}.pI_x6G_workbenchHeader{flex:none;min-width:0}.pI_x6G_workbenchBody{flex:1;min-height:0;display:flex;flex-direction:row;overflow:hidden}.pI_x6G_frame[data-right-collapsed] .pI_x6G_workbenchCol{border-left:0}.pI_x6G_workbenchTree{flex:none;min-width:0;min-height:0;display:flex;border-left:1px solid var(--dsw-alias-border-l1);overflow:hidden}.pI_x6G_workbenchEditor{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}.pI_x6G_centerCol{position:relative}";
+		const workbenchTagId = "veang-workbench-layout/workbench.css";
+		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(workbenchTagId) + "]") === null) {
+			const tag = document.createElement("style");
+			tag.dataset.plugin = "veang-workbench-layout";
+			tag.dataset.pluginCss = workbenchTagId;
+			tag.textContent = workbenchCss;
 			document.head.appendChild(tag);
 		}
 		var AppFrame_module_css_default = {
@@ -100,7 +109,12 @@ window.__ModuleLoader__.load({
 			"workspaceCol": "pI_x6G_workspaceCol",
 			"historySlot": "pI_x6G_historySlot",
 			"detailsOverlay": "pI_x6G_detailsOverlay",
-			"rightToggle": "pI_x6G_rightToggle"
+			"rightToggle": "pI_x6G_rightToggle",
+			"workbenchCol": "pI_x6G_workbenchCol",
+			"workbenchTree": "pI_x6G_workbenchTree",
+			"workbenchEditor": "pI_x6G_workbenchEditor",
+			"workbenchHeader": "pI_x6G_workbenchHeader",
+			"workbenchBody": "pI_x6G_workbenchBody"
 		};
 		//#endregion
 		//#region lib/types/client/AppFrame.js
@@ -139,6 +153,13 @@ window.__ModuleLoader__.load({
 		function RightColumn(props) {
 			return (0, react_jsx_runtime.jsx)("div", {
 				className: AppFrame_module_css_default.rightCol,
+				children: props.children
+			});
+		}
+		/** Right workbench column: file tree (workspace.tree) beside the editor (workspace). */
+		function WorkbenchColumn(props) {
+			return (0, react_jsx_runtime.jsx)("div", {
+				className: AppFrame_module_css_default.workbenchCol,
 				children: props.children
 			});
 		}
@@ -295,12 +316,12 @@ window.__ModuleLoader__.load({
 							width: cols.sidebar
 						})
 					}),
-					(0, react_jsx_runtime.jsxs)(WorkspaceColumn, { children: [renderSlot("workspace", {}), (0, react_jsx_runtime.jsx)("div", {
+					(0, react_jsx_runtime.jsxs)(CenterColumn, { children: [renderSlot("conversation", {}), (0, react_jsx_runtime.jsx)("div", { className: AppFrame_module_css_default.historySlot, children: renderSlot("conversation.history", {}) }), (0, react_jsx_runtime.jsx)("div", {
 						className: AppFrame_module_css_default.detailsOverlay,
 						"data-closed": panels.details === 0 || detailsSession === void 0 || void 0,
 						children: renderSlot("details", {})
 					})] }),
-					(0, react_jsx_runtime.jsxs)(RightColumn, { children: [renderSlot("conversation", {}), (0, react_jsx_runtime.jsx)("div", { className: AppFrame_module_css_default.historySlot, children: renderSlot("conversation.history", {}) })] }),
+					(0, react_jsx_runtime.jsxs)(WorkbenchColumn, { children: [(0, react_jsx_runtime.jsx)("div", { className: AppFrame_module_css_default.workbenchHeader, children: renderSlot("workspace.header", {}) }), (0, react_jsx_runtime.jsxs)("div", { className: AppFrame_module_css_default.workbenchBody, children: [(0, react_jsx_runtime.jsx)("div", { className: AppFrame_module_css_default.workbenchEditor, children: renderSlot("workspace", {}) }), (0, react_jsx_runtime.jsx)("div", { className: AppFrame_module_css_default.workbenchTree, children: renderSlot("workspace.tree", {}) })] })] }),
 					(0, react_jsx_runtime.jsx)("div", {
 						className: AppFrame_module_css_default.overlayLayer,
 						"data-shell-overlay": true,
@@ -320,12 +341,12 @@ window.__ModuleLoader__.load({
 						onDrag: onRightDrag,
 						onEnd: onDragEnd
 					}),
-					(0, react_jsx_runtime.jsx)("button", {
+					cols.right === 0 && (0, react_jsx_runtime.jsx)("button", {
 						type: "button",
 						className: AppFrame_module_css_default.rightToggle,
-						style: { right: cols.right > 0 ? cols.right + 8 : 12 },
-						title: cols.right > 0 ? "折叠 AI 工作区 (⌘J)" : "展开 AI 工作区 (⌘J)",
-						"aria-label": cols.right > 0 ? "折叠 AI 工作区" : "展开 AI 工作区",
+						style: { right: 12 },
+						title: "展开文件工作区 (⌘J)",
+						"aria-label": "展开文件工作区",
 						onClick: actions.toggleRight,
 						children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPanelLeftOutline16, {
 							size: 16,
@@ -359,21 +380,21 @@ window.__ModuleLoader__.load({
 		function createLayoutStore() {
 			return (0, _deepseek_ai_dsh_client_runtime_client.defineStore)({
 				init: () => ({
-					sidebar: restoredWidth("veang.layout.sidebar", 280, 232, 640, true),
-					right: restoredWidth("veang.layout.right", 420, 280, 720, true),
+					sidebar: restoredWidth("veang.layout.sidebar", 280, 264, 420, true),
+					right: restoredWidth("veang.layout.right", 640, 360, 960, true),
 					details: 0,
 					narrow: false,
 					narrowExpanded: false
 				}),
 				actions: {
 					setSidebar: (d, px) => {
-						d.sidebar = clampWidth(px, 232, 640);
+						d.sidebar = clampWidth(px, 264, 420);
 					},
 					setDetails: (d, px) => {
 						d.details = clampWidth(px, 300, 520);
 					},
 					setRight: (d, px) => {
-						d.right = clampWidth(px, 280, 720);
+						d.right = clampWidth(px, 360, 960);
 					},
 					toggleSidebar: (d) => {
 						if (d.narrow) d.narrowExpanded = !d.narrowExpanded;
@@ -391,7 +412,7 @@ window.__ModuleLoader__.load({
 						d.details = 0;
 					},
 					toggleRight: (d) => {
-						d.right = d.right === 0 ? 420 : 0;
+						d.right = d.right === 0 ? 640 : 0;
 					}
 				}
 			});
@@ -510,6 +531,14 @@ window.__ModuleLoader__.load({
 								scope: "root"
 							},
 						"workspace": {
+							kind: "single",
+							scope: "root"
+						},
+						"workspace.tree": {
+							kind: "single",
+							scope: "root"
+						},
+						"workspace.header": {
 							kind: "single",
 							scope: "root"
 						},

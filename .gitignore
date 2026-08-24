@@ -4,6 +4,9 @@
 # pnpm 本地缓存，不入库
 .pnpm-store/
 
+# npm 本地缓存，不入库
+.npm-cache/
+
 # 依赖与构建产物
 node_modules/
 dist/

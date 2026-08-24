@@ -1,6 +1,6 @@
 ---
 name: veang-workbench-install
-description: Install, update, verify, or start DeepSeek Harness with the public Veang Workbench plugin from npm. Use when a user asks to install DSH, install Veang Workbench, set up the DSH web profile, replace an old private DSH restore workflow, or verify a public installation. Installs DSH 0.1.0-rc.6 and veang-workbench 0.1.0 without migrating sessions, settings, projects, credentials, a desktop shell, or patched dependency files.
+description: Install, update, verify, or start DeepSeek Harness with the public Veang Workbench plugin from npm. Use when a user asks to install DSH, install Veang Workbench, set up the DSH web profile, replace an old private DSH restore workflow, or verify a public installation. Installs DSH 0.1.0-rc.8 and veang-workbench 0.1.1 without migrating sessions, settings, projects, credentials, a desktop shell, or patched dependency files.
 ---
 
 # Veang Workbench Install
@@ -19,9 +19,9 @@ Use `--target-home PATH` for an isolated test or a non-default home directory. P
 
 ## Installed Versions
 
-- `@deepseek-ai/dsh@0.1.0-rc.6`
-- `@deepseek-ai/dsh-web-app@0.1.0-rc.6`
-- `veang-workbench@0.1.0`
+- `@deepseek-ai/dsh@0.1.0-rc.8`
+- `@deepseek-ai/dsh-web-app@0.1.0-rc.8`
+- `veang-workbench@0.1.1`
 
 The installer uses public npm packages and configures only the `web` profile. It preserves other declared profile packages and approved build dependencies.
 
@@ -30,7 +30,7 @@ The installer uses public npm packages and configures only the `web` profile. It
 - Never import or inspect another user's DSH home, sessions, settings, project registry, credentials, or project files.
 - Never install the retired desktop launcher or modify files inside DSH dependencies.
 - Never copy the former migration payload. This public Skill contains no payload or user data.
-- Stop if the installed DSH version cannot be verified as `0.1.0-rc.6`.
+- Stop if the installed DSH version cannot be verified as `0.1.0-rc.8`.
 - If another custom layout is active, show the composed config and ask the user before removing it.
 
 ## Troubleshooting
