@@ -1,6 +1,6 @@
 ---
 name: veang-workbench-install
-description: Install, update, verify, or start DeepSeek Harness with the public Veang Workbench plugin from npm. Use when a user asks to install DSH, install Veang Workbench, set up the DSH web profile, replace an old private DSH restore workflow, or verify a public installation. Installs DSH 0.1.0-rc.8 and veang-workbench 0.1.1 without migrating sessions, settings, projects, credentials, a desktop shell, or patched dependency files.
+description: Install, update, verify, or start DeepSeek Harness with the public Veang Workbench plugin from npm. Use when a user asks to install DSH, install Veang Workbench, set up the DSH web profile, replace an old private DSH restore workflow, or verify a public installation. Installs DSH 0.1.0-rc.8 and veang-workbench 0.2.3 without migrating sessions, settings, projects, credentials, a desktop shell, or patched dependency files.
 ---
 
 # Veang Workbench Install
@@ -21,7 +21,7 @@ Use `--target-home PATH` for an isolated test or a non-default home directory. P
 
 - `@deepseek-ai/dsh@0.1.0-rc.8`
 - `@deepseek-ai/dsh-web-app@0.1.0-rc.8`
-- `veang-workbench@0.1.1`
+- `veang-workbench@0.2.3`
 
 The installer uses public npm packages and configures only the `web` profile. It preserves other declared profile packages and approved build dependencies.
 

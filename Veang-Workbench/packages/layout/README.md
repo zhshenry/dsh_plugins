@@ -1,7 +1,7 @@
 # veang-workbench-layout
 
-Internal browser layout component for [Veang Workbench](../../README.md). Install the `veang-workbench` bundle instead of this package directly.
+Legacy browser layout component for [Veang Workbench](../../README.md).
 
-In Veang Workbench `0.1.1`, this source is embedded into the main package as `veang-workbench/layout` during release and is not published separately.
+> 0.2.x 起不再使用：工作台改为渲染进官方 `shell.overlay` 座位（additive 形式），本包仅保留源码备查，不随发布包内嵌，也不单独发布。
 
 This component modifies DeepSeek Harness's MIT-licensed `ui-layout`; see `THIRD_PARTY_NOTICES.md`.

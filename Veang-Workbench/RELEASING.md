@@ -1,6 +1,6 @@
 # Releasing
 
-从 `0.1.0` 起发布 `veang-workbench` 入口包。布局和界面源码会在打包时内嵌为入口包的公开子路径，不单独发布内部组件包。
+从 `0.1.0` 起发布 `veang-workbench` 入口包。界面源码会在打包时内嵌为入口包的公开子路径，不单独发布内部组件包。
 
 ## 发布前
 
@@ -10,7 +10,7 @@ pnpm test
 pnpm run pack:release
 ```
 
-确认 `CHANGELOG.md`、兼容的 DeepSeek Harness 版本和 `packages/bundle/package.json` 的版本已经更新。检查生成的 tarball 中包含 `embedded/layout` 与 `embedded/ui`。不要把个人项目、会话、凭据或本地绝对路径加入发布包。
+确认 `CHANGELOG.md`、兼容的 DeepSeek Harness 版本和 `packages/bundle/package.json` 的版本已经更新。检查生成的 tarball 中包含 `embedded/ui` 与 `assets`。不要把个人项目、会话、凭据或本地绝对路径加入发布包。
 
 ## npm 发布
 
@@ -30,4 +30,4 @@ dsh --profile web --dump-config
 dsh --profile web
 ```
 
-确认 `ui-layout` 与 `ui-workspace` 已停用，`veang-layout`、`veang-ui` 分别指向 `veang-workbench/layout`、`veang-workbench/ui`，然后启动网页完成一次视觉检查并确认浏览器控制台无报错。
+确认 `--dump-config` 输出中包含 `name: veang-workbench`（0.2.x 单入口 additive 形式，不再停用官方 `ui-layout` / `ui-workspace`），然后启动网页完成一次视觉检查并确认浏览器控制台无报错。
