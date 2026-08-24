@@ -9,30 +9,34 @@ const root = path.resolve(import.meta.dirname, "..");
 const read = (relative) => readFile(path.join(root, relative), "utf8");
 const json = async (relative) => JSON.parse(await read(relative));
 
-test("all published packages use the MIT License", async () => {
-  const versions = { bundle: "0.1.0", layout: "0.1.0", ui: "0.1.0" };
-  for (const [name, version] of Object.entries(versions)) {
+test("all published packages use the MIT License and a 0.2.x version", async () => {
+  for (const name of ["bundle", "ui"]) {
     const manifest = await json(`packages/${name}/package.json`);
     assert.equal(manifest.license, "MIT");
-    assert.equal(manifest.version, version);
+    assert.match(manifest.version, /^0\.2\./);
   }
   assert.match(await read("LICENSE"), /MIT License/);
 });
 
 test("bundle exports self-contained DSH plugin entry points", async () => {
   const manifest = await json("packages/bundle/package.json");
-  assert.equal(manifest.exports["./layout"], "./embedded/layout/index.js");
-  assert.equal(manifest.exports["./layout/package.json"], "./embedded/layout/package.json");
+  // 0.2.x：单一插件，layout fork 已移除；客户端入口走官方 dsh.client 清单。
+  assert.equal(manifest.exports["./client"], "./embedded/ui/client.js");
   assert.equal(manifest.exports["./ui"], "./embedded/ui/index.js");
   assert.equal(manifest.exports["./ui/package.json"], "./embedded/ui/package.json");
+  assert.equal(manifest.exports["./layout"], undefined);
+  assert.deepEqual(manifest.dsh.client.inject, ["slots", "sessions", "workspaces"]);
+  assert.equal(manifest.dsh.client.platform, "web");
   assert.equal(manifest.dependencies.mammoth, "^1.10.0");
   assert.equal(manifest.dependencies.xlsx, undefined);
   assert.ok(manifest.files.includes("vendor"));
   const uiManifest = await json("packages/ui/package.json");
   assert.equal(uiManifest.dependencies.xlsx, "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz");
+  assert.deepEqual(uiManifest.dsh.client.inject, ["slots", "sessions", "workspaces"]);
   const build = await read("scripts/build-bundle.mjs");
   assert.match(build, /xlsx\/xlsx\.mjs/);
   assert.match(build, /SHEETJS-LICENSE/);
+  assert.doesNotMatch(build, /embedded[\\/"]+layout/);
 });
 
 test("workbook previews use the patched SheetJS release", async () => {
@@ -56,23 +60,31 @@ test("workbook previews use the patched SheetJS release", async () => {
   }
 });
 
-test("bundle replaces the layout and disables the stock workspace", async () => {
+test("bundle is additive: stock shell stays enabled, one plugin inserted", async () => {
   const patch = await read("packages/bundle/cordis.patch.yml");
-  assert.match(patch, /id: ui-layout\n\s+disabled: true/);
-  assert.match(patch, /id: ui-workspace\n\s+disabled: true/);
-  assert.match(patch, /id: veang-layout\n\s+name: veang-workbench\/layout/);
-  assert.match(patch, /id: veang-ui\n\s+name: veang-workbench\/ui/);
+  // 0.2.x：官方 ui-layout 不再被禁用（worktable 式增量形态）。
+  assert.doesNotMatch(patch, /id: ui-layout\n\s+disabled: true/);
+  assert.doesNotMatch(patch, /id: ui-workspace\n\s+disabled: true/);
+  assert.doesNotMatch(patch, /veang-workbench\/layout/);
+  assert.match(patch, /id: veang-ui\n\s+name: veang-workbench\n/);
+  // 主入口必须转出口真正的服务端插件（patch 只引用包名）。
+  const mainEntry = await read("packages/bundle/lib/index.js");
+  assert.match(mainEntry, /export \{ inject, apply \} from "\.\.\/embedded\/ui\/index\.js"/);
 });
 
-test("client module ids and injection names agree with manifests", async () => {
-  const layoutClient = await read("packages/layout/lib/client.js");
+test("client loads through the official manifest with no boot-graph hack", async () => {
   const uiClient = await read("packages/ui/lib/client.js");
   const uiHost = await read("packages/ui/lib/index.js");
-  const uiManifest = await json("packages/ui/package.json");
-  assert.match(layoutClient, /id: "veang-workbench-layout"/);
-  assert.match(uiClient, /id: "veang-workbench-ui"/);
-  assert.match(uiHost, /id: "veang-workbench-ui"/);
-  assert.ok(uiManifest.dsh.client.inject.includes("veang-workbench-layout"));
+  // 模块 id 必须与 loader 入口名（patch insert 的 name: veang-workbench）一致。
+  assert.match(uiClient, /id: "veang-workbench",/);
+  // 宿主端不再改写首页 boot 图（tapIndex/__DSH_BOOT__ 全部移除）。
+  assert.doesNotMatch(uiHost, /tapIndex|__DSH_BOOT__|CLIENT_ENTRY/);
+  // overlay 形态：官方座位注入。
+  assert.match(uiClient, /slots\.inject\("shell\.overlay"/);
+  assert.match(uiClient, /slots\.inject\("sidebar\.footer\.action"/);
+  // 官方对话通过 margin 挤压右移（worktable 同款），卸载时还原。
+  assert.match(uiClient, /applyConversationSqueeze/);
+  assert.match(uiClient, /releaseConversationSqueeze/);
 });
 
 test("workspace terminal runs commands from the selected project root", async () => {
@@ -107,11 +119,11 @@ test("workspace client exposes a terminal toggle and lower panel", async () => {
   const source = await read("packages/ui/lib/client.js");
   assert.match(source, /className: "dwu-terminalToggle"/);
   assert.match(source, /className: "dwu-main"/);
-  assert.match(source, /terminalOpen && h\(TerminalPanel/);
+  assert.match(source, /terminalState\.open && h\(TerminalPanel/);
   assert.match(source, /op=terminal/);
   assert.match(source, /event\.key === "`"/);
   assert.doesNotMatch(source, /className: "dwu-terminalTitle"/);
-  assert.match(source, /\.dwu-workHead\{[^}]*padding:0 52px 0 12px/);
+  assert.match(source, /\.dwu-workHead\{[^}]*padding:0 12px/);
 });
 
 test("workspace tabs distinguish tree previews from AI-pinned files", async () => {

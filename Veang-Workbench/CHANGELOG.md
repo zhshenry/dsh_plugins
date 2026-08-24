@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 - 2026-08-20
+
+- 对齐 DeepSeek Harness `0.1.0-rc.8`：`veang-workbench-layout` 的 peer 依赖与安装脚本从 `0.1.0-rc.7` 升级到 `0.1.0-rc.8`
+
 ## 0.1.0 - 2026-08-19
 
 Veang Workbench 首次发布，从 [DSH Cockpit](https://github.com/ethan0084/dsh-cockpit) 0.2.4（MIT License）分叉。

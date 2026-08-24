@@ -1,6 +1,6 @@
 {
   "name": "veang-workbench",
-  "version": "0.1.0",
+  "version": "0.2.3",
   "description": "A desktop-style project and AI workbench for DeepSeek Harness",
   "keywords": [
     "deepseek-harness",
@@ -28,8 +28,7 @@
   },
   "exports": {
     ".": "./lib/index.js",
-    "./layout": "./embedded/layout/index.js",
-    "./layout/package.json": "./embedded/layout/package.json",
+    "./client": "./embedded/ui/client.js",
     "./ui": "./embedded/ui/index.js",
     "./ui/package.json": "./embedded/ui/package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
@@ -38,6 +37,7 @@
   "files": [
     "lib/index.js",
     "embedded",
+    "assets",
     "vendor",
     "THIRD_PARTY_NOTICES.md",
     "cordis.patch.yml"
@@ -45,6 +45,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots",
+        "sessions",
+        "workspaces"
+      ]
     }
   },
   "dependencies": {

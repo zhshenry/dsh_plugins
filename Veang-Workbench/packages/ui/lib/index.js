@@ -2,7 +2,7 @@
 import { promises as fs, createReadStream, createWriteStream, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
@@ -24,17 +24,15 @@ const MAX_TERMINAL_COMMAND_BYTES = 16 * 1024;
 const MAX_TERMINAL_OUTPUT_BYTES = 1024 * 1024;
 const TERMINAL_TIMEOUT_MS = 120 * 1000;
 const CLIENT_PATH = fileURLToPath(new URL("./client.js", import.meta.url));
-const CLIENT_REV = createHash("sha1").update(readFileSync(CLIENT_PATH)).digest("hex").slice(0, 12);
-const CLIENT_ENTRY = {
-  id: "veang-workbench-ui",
-  url: `/veang-workbench/client.js?rev=${CLIENT_REV}`,
-  rev: CLIENT_REV,
-  inject: [
-    "@deepseek-ai/dsh-client-runtime",
-    "veang-workbench-layout",
-    "@deepseek-ai/dsh-client-ui-conversation"
-  ]
-};
+const BACKGROUND_PATH = fileURLToPath(new URL("../../assets/background.png", import.meta.url));
+const DATA_DIR = path.join(process.env.DSH_HOME || path.join(process.env.USERPROFILE || process.env.HOME || process.cwd(), ".dsh"), "veang-workbench");
+const WALLPAPER_DIR = path.join(DATA_DIR, "wallpapers");
+const SETTINGS_PATH = path.join(DATA_DIR, "settings.json");
+const MAX_WALLPAPER_BYTES = 24 * 1024 * 1024;
+const WALLPAPER_NAME_PATTERN = /^wallpaper-[a-z0-9-]+\.(png|jpe?g|webp|gif|avif|bmp)$/i;
+const WALLPAPER_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif", ".bmp": "image/bmp" };
+// 0.2.0: the client entry is loaded through the official dsh.client manifest
+// (package.json dsh.client) — no more boot-graph rewriting via tapIndex.
 
 const contentTypes = new Map([
   [".pdf", "application/pdf"],
@@ -153,6 +151,36 @@ export async function listWorkspaceDirectory(root, relative) {
   }));
   entries.sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name, undefined, { numeric: true }));
   return entries;
+}
+
+export async function searchWorkspaceFiles(root, query, limit = 200) {
+  const { target } = await realTargetFrom(root, "");
+  const needle = String(query).toLowerCase();
+  const rootAbs = path.resolve(root);
+  const results = [];
+  const skipDirs = new Set([".git", "node_modules", ".pnpm-store", ".dsh-vision-toolkit", "dist", "build", "out", "coverage", "__pycache__", ".venv", "venv", "target", ".next", ".cache", "vendor"]);
+  let visited = 0;
+  let truncated = false;
+  const walk = async (dir, depth) => {
+    if (results.length >= limit || visited > 600 || depth > 10) return;
+    visited += 1;
+    const dirents = (await fs.readdir(dir, { withFileTypes: true })).catch(() => []);
+    for (const entry of dirents) {
+      if (results.length >= limit) { truncated = true; return; }
+      const name = entry.name;
+      const absolute = path.join(dir, name);
+      if (name.toLowerCase().includes(needle)) {
+        results.push({ name, path: path.relative(rootAbs, absolute).replace(/\\/g, "/"), directory: entry.isDirectory(), hidden: name.startsWith(".") });
+      }
+      if (entry.isDirectory()) {
+        if (skipDirs.has(name)) continue;
+        await walk(absolute, depth + 1);
+      }
+    }
+  };
+  await walk(target, 0);
+  results.sort((a, b) => Number(b.directory) - Number(a.directory) || a.path.localeCompare(b.path, undefined, { numeric: true }));
+  return { entries: results, truncated: truncated && results.length >= limit, visited };
 }
 
 export async function readWorkspaceText(root, relative) {
@@ -372,6 +400,115 @@ export async function runTerminalCommand(rootValue, commandValue, cwdValue = "")
   });
 }
 
+async function runGit(rootValue, args) {
+  const { target } = await realTargetFrom(rootValue, "");
+  return await new Promise((resolve, reject) => {
+    const child = spawn("git", args, { cwd: target, stdio: ["ignore", "pipe", "pipe"] });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let outputBytes = 0;
+    const append = (chunks, chunk) => {
+      if (outputBytes >= MAX_TERMINAL_OUTPUT_BYTES) return;
+      const buffer = Buffer.from(chunk);
+      const remaining = MAX_TERMINAL_OUTPUT_BYTES - outputBytes;
+      const accepted = buffer.subarray(0, remaining);
+      chunks.push(accepted);
+      outputBytes += accepted.length;
+    };
+    child.stdout.on("data", (chunk) => append(stdoutChunks, chunk));
+    child.stderr.on("data", (chunk) => append(stderrChunks, chunk));
+    child.once("error", reject);
+    child.once("close", (code) => {
+      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf8");
+      if (code !== 0) {
+        const error = new Error(stderr.trim() || `git 退出码 ${code}`);
+        error.code = "GIT_ERROR";
+        reject(error);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function gitStatusEntries(rootValue) {
+  const output = await runGit(rootValue, ["status", "--porcelain=v1"]);
+  return output.split("\n").filter(Boolean).map((line) => {
+    const x = line[0];
+    const y = line[1];
+    const rest = line.slice(3);
+    if (rest.includes(" -> ")) {
+      const [oldPath, newPath] = rest.split(" -> ");
+      return { x, y, path: newPath, originalPath: oldPath };
+    }
+    return { x, y, path: rest };
+  });
+}
+
+async function loadSkinSettingsFile() {
+  try { return JSON.parse(await fs.readFile(SETTINGS_PATH, "utf8")); } catch { return {}; }
+}
+
+function clampSkinNumber(value, fallback, min, max) {
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.min(max, Math.max(min, Math.round(num))) : fallback;
+}
+
+function sanitizeSkinSettings(raw) {
+  const value = (raw && typeof raw === "object") ? raw : {};
+  return {
+    appearance: value.appearance === "default" ? "default" : "veang",
+    wallpaper: value.wallpaper === "builtin" || (typeof value.wallpaper === "string" && WALLPAPER_NAME_PATTERN.test(value.wallpaper)) ? value.wallpaper : "builtin",
+    uploads: Array.isArray(value.uploads)
+      ? value.uploads.filter((item) => item && typeof item.fileName === "string" && WALLPAPER_NAME_PATTERN.test(item.fileName)).slice(0, 24)
+          .map((item) => ({ fileName: item.fileName, name: String(item.name ?? item.fileName).slice(0, 120) }))
+      : [],
+    occlusion: clampSkinNumber(value.occlusion, 0, 0, 100),
+    blur: clampSkinNumber(value.blur, 0, 0, 20),
+    sidebar: clampSkinNumber(value.sidebar, 85, 0, 100),
+    conversation: clampSkinNumber(value.conversation, 65, 0, 100),
+    workbench: clampSkinNumber(value.workbench, 80, 0, 100)
+  };
+}
+
+async function saveSkinSettingsFile(value) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(SETTINGS_PATH, JSON.stringify(value, null, 2), "utf8");
+  return value;
+}
+
+async function uploadWallpaperFile(req, nameValue) {
+  await fs.mkdir(WALLPAPER_DIR, { recursive: true });
+  const ext = path.extname(safeEntryName(String(nameValue || "wallpaper.png"))).toLowerCase();
+  if (!(ext in WALLPAPER_TYPES)) throw new Error("unsupported-wallpaper-type");
+  const fileName = `wallpaper-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}${ext}`;
+  const temporaryTarget = path.join(WALLPAPER_DIR, `.tmp-${randomUUID()}`);
+  const finalTarget = path.join(WALLPAPER_DIR, fileName);
+  try {
+    let received = 0;
+    const limit = new Transform({
+      transform(chunk, _encoding, callback) {
+        received += chunk.length;
+        if (received > MAX_WALLPAPER_BYTES) return callback(new Error("wallpaper-too-large"));
+        callback(null, chunk);
+      }
+    });
+    await pipeline(req, limit, createWriteStream(temporaryTarget, { flags: "wx" }));
+    await fs.rename(temporaryTarget, finalTarget);
+  } catch (error) {
+    await fs.unlink(temporaryTarget).catch(() => {});
+    throw error;
+  }
+  return { fileName };
+}
+
+function wallpaperTarget(nameValue) {
+  if (typeof nameValue !== "string" || !WALLPAPER_NAME_PATTERN.test(nameValue)) return null;
+  const target = path.resolve(WALLPAPER_DIR, nameValue);
+  return target.startsWith(path.resolve(WALLPAPER_DIR) + path.sep) ? target : null;
+}
+
 export async function previewDocument(root, relative) {
   const { target } = await realTargetFrom(root, relative);
   const ext = path.extname(target).toLowerCase();
@@ -402,6 +539,12 @@ async function handleApi(req, res) {
   try {
     if (req.method === "GET" && op === "list") {
       json(res, 200, { ok: true, entries: await listWorkspaceDirectory(url.searchParams.get("root"), url.searchParams.get("path") ?? "") });
+      return;
+    }
+    if (req.method === "GET" && op === "search") {
+      const query = (url.searchParams.get("q") ?? "").trim();
+      if (!query || query.length > 200) { json(res, 200, { ok: true, entries: [] }); return; }
+      json(res, 200, { ok: true, ...(await searchWorkspaceFiles(url.searchParams.get("root"), query)) });
       return;
     }
     if (req.method === "GET" && op === "read") {
@@ -442,6 +585,75 @@ async function handleApi(req, res) {
       assertSameOrigin(req);
       const body = await readJson(req);
       json(res, 200, { ok: true, ...(await runTerminalCommand(body.root, body.command, body.cwd)) });
+      return;
+    }
+    if (req.method === "GET" && op === "git-status") {
+      try {
+        json(res, 200, { ok: true, entries: await gitStatusEntries(url.searchParams.get("root")) });
+      } catch (error) {
+        if (/not a git repository/i.test(String(error?.message))) json(res, 200, { ok: true, notRepo: true, entries: [] });
+        else json(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+    if (req.method === "POST" && op === "git-stage") {
+      assertSameOrigin(req);
+      const body = await readJson(req);
+      await runGit(body.root, ["add", "--", body.path]);
+      json(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === "POST" && op === "git-unstage") {
+      assertSameOrigin(req);
+      const body = await readJson(req);
+      await runGit(body.root, ["reset", "HEAD", "--", body.path]);
+      json(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === "POST" && op === "git-discard") {
+      assertSameOrigin(req);
+      const body = await readJson(req);
+      if (body.untracked) {
+        const { target } = await realTargetFrom(body.root, body.path);
+        await fs.unlink(target);
+      } else {
+        await runGit(body.root, ["restore", "--staged", "--worktree", "--", body.path]);
+      }
+      json(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === "GET" && op === "skin-load") {
+      json(res, 200, { ok: true, settings: sanitizeSkinSettings(await loadSkinSettingsFile()) });
+      return;
+    }
+    if (req.method === "POST" && op === "skin-save") {
+      assertSameOrigin(req);
+      const body = await readJson(req);
+      json(res, 200, { ok: true, settings: await saveSkinSettingsFile(sanitizeSkinSettings(body)) });
+      return;
+    }
+    if (req.method === "POST" && op === "wallpaper-upload") {
+      assertSameOrigin(req);
+      json(res, 200, { ok: true, ...(await uploadWallpaperFile(req, url.searchParams.get("name"))) });
+      return;
+    }
+    if (req.method === "POST" && op === "wallpaper-delete") {
+      assertSameOrigin(req);
+      const body = await readJson(req);
+      const target = wallpaperTarget(body.fileName);
+      if (target) await fs.unlink(target).catch(() => {});
+      json(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === "GET" && op === "wallpaper-file") {
+      const target = wallpaperTarget(url.searchParams.get("name"));
+      if (!target) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end("wallpaper not found");
+        return;
+      }
+      res.writeHead(200, { "content-type": WALLPAPER_TYPES[path.extname(target).toLowerCase()], "cache-control": "public, max-age=31536000, immutable" });
+      createReadStream(target).pipe(res);
       return;
     }
     json(res, 404, { ok: false, error: "unknown-operation" });
@@ -503,31 +715,33 @@ function handleClient(_req, res) {
   res.end(body);
 }
 
-function injectClientEntry(html) {
-  return html.replace(/window\.__DSH_BOOT__ = ([^<]+)<\/script>/, (whole, encoded) => {
-    try {
-      const graph = JSON.parse(encoded.trim());
-      if (!graph.entries.some((entry) => entry.id === CLIENT_ENTRY.id)) graph.entries.push(CLIENT_ENTRY);
-      graph.rev = createHash("sha1").update(JSON.stringify(graph.entries)).digest("hex").slice(0, 12);
-      return `window.__DSH_BOOT__ = ${JSON.stringify(graph).replaceAll("<", "\\u003c")}</script>`;
-    } catch {
-      return whole;
-    }
-  });
+function handleBackground(_req, res) {
+  try {
+    const body = readFileSync(BACKGROUND_PATH);
+    res.writeHead(200, {
+      "content-type": "image/png",
+      "content-length": body.length,
+      "cache-control": "public, max-age=31536000, immutable"
+    });
+    res.end(body);
+  } catch {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("background not found");
+  }
 }
 
-// clientModules is an ordering dependency: its index transform must run first,
-// then this plugin appends the local client entry to the completed boot graph.
-export const inject = ["webServer", "clientModules"];
+// 0.2.0: no index rewriting at all — the host loads the client entry through
+// the official dsh.client manifest declared in package.json.
+export const inject = ["webServer"];
 
 export function apply(ctx) {
   ctx.effect(() => {
     const disposeApi = ctx.webServer.register({ kind: "exact", path: API_PATH, handler: handleApi });
     const disposeAsset = ctx.webServer.register({ kind: "exact", path: ASSET_PATH, handler: handleAsset });
     const disposeClient = ctx.webServer.register({ kind: "exact", path: "/veang-workbench/client.js", handler: handleClient });
-    const disposeIndex = ctx.webServer.tapIndex(injectClientEntry);
+    const disposeBackground = ctx.webServer.register({ kind: "exact", path: "/veang-workbench/background.png", handler: handleBackground });
     return () => {
-      disposeIndex();
+      disposeBackground();
       disposeClient();
       disposeAsset();
       disposeApi();

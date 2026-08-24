@@ -8,7 +8,6 @@ const vendor = path.join(root, "packages/bundle/vendor");
 
 await rm(embedded, { recursive: true, force: true });
 await rm(vendor, { recursive: true, force: true });
-await mkdir(path.join(embedded, "layout"), { recursive: true });
 await mkdir(path.join(embedded, "ui"), { recursive: true });
 await mkdir(vendor, { recursive: true });
 
@@ -30,12 +29,9 @@ const copyWithIds = async (source, destination, replacements) => {
   await writeFile(destination, body);
 };
 
-await cp(path.join(root, "packages/layout/lib/index.js"), path.join(embedded, "layout/index.js"));
-await copyWithIds(
-  path.join(root, "packages/layout/lib/client.js"),
-  path.join(embedded, "layout/client.js"),
-  [["id: \"veang-workbench-layout\"", "id: \"veang-workbench/layout\""]],
-);
+// 0.2.0: the layout fork is gone — the stock ui-layout stays enabled and the
+// workbench UI renders through the official shell.overlay seat. Only the ui
+// package is embedded.
 
 await copyWithIds(
   path.join(root, "packages/ui/lib/index.js"),
@@ -43,8 +39,6 @@ await copyWithIds(
   [
     ["\"xlsx/dist/cpexcel.full.mjs\"", "\"../../vendor/cpexcel.full.mjs\""],
     ["\"xlsx\"", "\"../../vendor/xlsx.mjs\""],
-    ["id: \"veang-workbench-ui\"", "id: \"veang-workbench/ui\""],
-    ["\"veang-workbench-layout\"", "\"veang-workbench/layout\""],
   ],
 );
 
@@ -54,20 +48,8 @@ await cp(path.join(root, "packages/ui/node_modules/xlsx/LICENSE"), path.join(ven
 await copyWithIds(
   path.join(root, "packages/ui/lib/client.js"),
   path.join(embedded, "ui/client.js"),
-  [["id: \"veang-workbench-ui\"", "id: \"veang-workbench/ui\""]],
+  [],
 );
-
-await writeFile(path.join(embedded, "layout/package.json"), JSON.stringify({
-  name: "veang-workbench/layout",
-  type: "module",
-  exports: { ".": "./index.js", "./client": "./client.js", "./package.json": "./package.json" },
-  dsh: {
-    client: {
-      inject: ["@deepseek-ai/dsh-client-runtime", "@deepseek-ai/dsh-client-ui-theme"],
-      platform: "web",
-    },
-  },
-}, null, 2) + "\n");
 
 await writeFile(path.join(embedded, "ui/package.json"), JSON.stringify({
   name: "veang-workbench/ui",

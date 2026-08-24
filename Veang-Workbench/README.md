@@ -2,7 +2,7 @@
 
 把 DeepSeek Harness 改造成桌面式项目工作台：左侧项目与文件树，中间文件编辑/预览，右侧保留 AI 对话。
 
-> 当前版本面向 **DeepSeek Harness 0.1.0-rc.7**。DSH 仍处于开发预览阶段，升级 DSH 前请先查看兼容性说明。
+> 当前版本面向 **DeepSeek Harness 0.1.0-rc.8**。DSH 仍处于开发预览阶段，升级 DSH 前请先查看兼容性说明。
 
 <img width="1283" height="862" alt="image" src="https://github.com/user-attachments/assets/e9dcd44f-16f3-4f23-9c51-fcdbf9fe1da3" />
 
@@ -64,7 +64,7 @@ dsh --profile web --dump-config   # 确认 ui-layout / ui-workspace 不再是 di
 
 ### 使用 Codex Skill 安装（可选）
 
-仓库提供了公开版 `veang-workbench-install` Skill。它会从 npm 安装并验证 DSH 0.1.0-rc.7 与 Veang Workbench，不包含会话、设置、项目、凭据、桌面端外壳或私人迁移数据。
+仓库提供了公开版 `veang-workbench-install` Skill。它会从 npm 安装并验证 DSH 0.1.0-rc.8 与 Veang Workbench，不包含会话、设置、项目、凭据、桌面端外壳或私人迁移数据。
 
 在 Codex 中调用 `$skill-installer`，并发送：
 
