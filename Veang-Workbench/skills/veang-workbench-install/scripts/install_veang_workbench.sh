@@ -4,7 +4,7 @@ set -euo pipefail
 
 DSH_VERSION="0.1.0-rc.8"
 WEB_APP_VERSION="0.1.0-rc.8"
-WORKBENCH_VERSION="0.1.1"
+WORKBENCH_VERSION="0.2.3"
 MODE="check"
 TARGET_HOME="$HOME"
 EXTRA_ARGS=()
@@ -157,8 +157,7 @@ NODE
   config_file="$(mktemp "${TMPDIR:-/tmp}/veang-workbench-install-config.XXXXXX")"
   trap 'rm -f "$config_file"' RETURN
   DSH_HOME="$TARGET_DSH" "$dsh_bin" --profile web --dump-config >"$config_file"
-  grep -Fq "name: veang-workbench/layout" "$config_file" || { printf '%s\n' "Missing veang-workbench/layout in composed config." >&2; return 1; }
-  grep -Fq "name: veang-workbench/ui" "$config_file" || { printf '%s\n' "Missing veang-workbench/ui in composed config." >&2; return 1; }
+  grep -Fq "name: veang-workbench" "$config_file" || { printf '%s\n' "Missing veang-workbench in composed config." >&2; return 1; }
   rm -f "$config_file"
   trap - RETURN
   printf '%s\n' "DSH installation verification: OK"
