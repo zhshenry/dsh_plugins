@@ -2,16 +2,16 @@
 
 把 DeepSeek Harness 改造成桌面式项目工作台：左侧官方会话 / 工作区列表，中间文件编辑 / 预览，右侧保留 AI 对话，工作台与对话双向绑定。
 
-> 当前版本 **0.2.3**，面向 **DeepSeek Harness 0.1.0-rc.8**。DSH 仍处于开发预览阶段，升级 DSH 前请先查看兼容性说明。
-
-<img width="1283" height="862" alt="image" src="https://github.com/user-attachments/assets/e9dcd44f-16f3-4f23-9c51-fcdbf9fe1da3" />
+> 当前版本 **0.2.3**，面向 **DeepSeek Harness 0.1.1-rc.2**。DSH 仍处于开发预览阶段，升级 DSH 前请先查看兼容性说明。
 
 ## 特性
 
 - **官方座位接入**：工作台渲染进官方 `shell.overlay` 座位，通过「右挤对话」与官方会话共存，不替换、不禁用任何官方插件
-- **工作台 ↔ 对话双向绑定**：每个工作区的「素材 / 代码」zone 可各绑一条会话；切工作台自动切对话，切对话自动切工作台
+- **工作台 ↔ 对话双向绑定**：素材 / 代码 / 八字 zone 可各绑一条会话，切工作台自动切对话、切对话自动切工作台；游戏关系视图按工作区解析，不依赖会话绑定
+- **游戏关系视图**：三列图谱（脚本/配置 ｜ 场景/预制·材质 ｜ 素材）解析代码 ↔ 素材引用；Unity 项目识别 `.meta` GUID、`Resources.Load`、`Addressables` 强关联，文件名匹配兜底（实线=强关联、虚线=启发式）；支持分类着色与过滤、搜索、选中查看引用详情、零引用素材标记
 - **文件工作区**：文本 / 代码编辑，Markdown / PDF / 图片 / 音视频 / DOCX / XLSX 预览；单击复用预览标签，双击固定
 - **素材工作区**：文件树图标模式下图片 / 视频显示缩略图；中间空状态按 zone 区分（素材 🎨 / 代码 ⌘）
+- **像素编辑器**：内置 Aseprite 像素编辑器（移植自 dsh-aseprite，MIT License），支持 `.ase` / `.aseprite` 打开与编辑
 - **文件操作**：新建、重命名、复制、移动、删除、上传、拖拽移动
 - **AI 上下文**：打开的文件可设为当前对话参考上下文；从 AI 对话打开的工作区文件固定到新标签页
 - **集成终端**：中部预览区下方可展开，在当前项目目录运行命令并保留 `cd` 后的路径
@@ -86,7 +86,7 @@ dsh --profile web --dump-config   # 确认不再包含 name: veang-workbench
 
 ## 使用 Codex Skill 安装（可选）
 
-仓库提供公开版 `veang-workbench-install` Skill，从 npm 安装并验证 DSH 0.1.0-rc.8 与 Veang Workbench 0.2.3，不包含会话、设置、项目、凭据、桌面端外壳或私人迁移数据。
+仓库提供公开版 `veang-workbench-install` Skill，从 npm 安装并验证 DSH 0.1.1-rc.2 与 Veang Workbench 0.2.3，不包含会话、设置、项目、凭据、桌面端外壳或私人迁移数据。
 
 在 Codex 中调用 `$skill-installer`，发送：
 

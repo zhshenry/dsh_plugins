@@ -21,6 +21,7 @@ const MAX_BODY_BYTES = 14 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 const MAX_OFFICE_BYTES = 25 * 1024 * 1024;
 const MAX_TERMINAL_COMMAND_BYTES = 16 * 1024;
+const MAX_BINARY_BYTES = 64 * 1024 * 1024;
 const MAX_TERMINAL_OUTPUT_BYTES = 1024 * 1024;
 const TERMINAL_TIMEOUT_MS = 120 * 1000;
 const CLIENT_PATH = fileURLToPath(new URL("./client.js", import.meta.url));
@@ -164,7 +165,7 @@ export async function searchWorkspaceFiles(root, query, limit = 200) {
   const walk = async (dir, depth) => {
     if (results.length >= limit || visited > 600 || depth > 10) return;
     visited += 1;
-    const dirents = (await fs.readdir(dir, { withFileTypes: true })).catch(() => []);
+    const dirents = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const entry of dirents) {
       if (results.length >= limit) { truncated = true; return; }
       const name = entry.name;
@@ -197,6 +198,219 @@ export async function statWorkspaceFile(root, relative) {
   return { size: stat.size, mtimeMs: stat.mtimeMs, directory: stat.isDirectory() };
 }
 
+// ── 关系视图（图谱）：解析「代码 → 素材」引用 ─────────────────────────────
+const GRAPH_SKIP_DIRS = new Set([".git", "node_modules", ".pnpm-store", "dist", "build", "out", "coverage", "__pycache__", ".venv", "venv", "target", ".next", ".cache", "vendor", ".idea", ".vscode", "obj", "bin", "Library"]);
+const GRAPH_CODE_EXTS = new Set(["js", "jsx", "mjs", "cjs", "ts", "tsx", "py", "rb", "go", "rs", "java", "kt", "c", "cpp", "cc", "h", "hpp", "cs", "php", "swift", "sh", "bash", "zsh", "html", "htm", "css", "scss", "less", "json", "yaml", "yml", "toml", "xml", "sql", "md", "mdx", "vue", "svelte", "lua", "dart", "r", "scala", "elm", "ex", "erl", "hs", "clj", "proto", "gradle", "gd", "tscn", "hlsl", "glsl", "shader", "cginc", "unity", "prefab", "mat", "csproj", "sln", "fs", "fsx"]);
+const GRAPH_ASSET_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "tif", "tiff", "aseprite", "ase", "mp4", "webm", "mov", "m4v", "avi", "mkv", "mp3", "wav", "ogg", "flac", "ttf", "otf", "woff", "woff2", "fbx", "gltf", "glb", "obj", "blend", "psd", "tga", "dds", "ktx", "ktx2", "exr", "hdr", "atlas", "sprite"]);
+const GRAPH_MAX_CODE = 600;
+const GRAPH_MAX_ASSETS = 800;
+const GRAPH_MAX_EDGES = 3000;
+const GRAPH_MAX_CODE_BYTES = 512 * 1024;
+
+function graphExt(name) {
+  const base = name.split(/[\\/]/).pop().toLowerCase();
+  if (base === "dockerfile" || base === "makefile") return base;
+  const at = base.lastIndexOf(".");
+  return at < 0 ? "" : base.slice(at + 1);
+}
+function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+// 素材 / 代码 子分类：用于图谱着色与图例。
+const GRAPH_ASSET_CATEGORIES = [
+  { key: "image", label: "图片/纹理", color: "#f59e0b", role: "asset", exts: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif", "tif", "tiff", "psd", "tga", "dds", "ktx", "ktx2", "exr", "hdr"] },
+  { key: "audio", label: "音频", color: "#a78bfa", role: "asset", exts: ["mp3", "wav", "ogg", "flac", "m4a"] },
+  { key: "video", label: "视频", color: "#f472b6", role: "asset", exts: ["mp4", "webm", "mov", "m4v", "avi", "mkv"] },
+  { key: "model", label: "3D 模型", color: "#22d3ee", role: "asset", exts: ["fbx", "gltf", "glb", "obj", "blend"] },
+  { key: "font", label: "字体", color: "#2dd4bf", role: "asset", exts: ["ttf", "otf", "woff", "woff2"] },
+  { key: "sprite", label: "精灵/动画", color: "#4ade80", role: "asset", exts: ["aseprite", "ase", "atlas", "sprite"] }
+];
+const GRAPH_CODE_CATEGORIES = [
+  { key: "script", label: "脚本", color: "#60a5fa", role: "source", exts: ["js", "jsx", "mjs", "cjs", "ts", "tsx", "py", "rb", "go", "rs", "java", "kt", "c", "cpp", "cc", "h", "hpp", "cs", "php", "swift", "sh", "bash", "zsh", "lua", "dart", "r", "scala", "elm", "ex", "erl", "hs", "clj", "proto", "fs", "fsx", "gd"] },
+  { key: "config", label: "配置", color: "#94a3b8", role: "source", exts: ["json", "yaml", "yml", "toml", "xml", "ini", "cfg", "conf", "env", "csproj", "sln", "gradle"] },
+  { key: "shader", label: "着色器", color: "#c084fc", role: "source", exts: ["hlsl", "glsl", "shader", "cginc"] },
+  { key: "markup", label: "标记/样式", color: "#fbbf24", role: "source", exts: ["html", "htm", "css", "scss", "less", "md", "mdx", "vue", "svelte", "sql"] },
+  { key: "scene", label: "场景/预制", color: "#818cf8", role: "container", exts: ["unity", "prefab", "tscn", "tres", "scene", "scn"] },
+  { key: "material", label: "材质", color: "#38bdf8", role: "container", exts: ["mat"] }
+];
+function classifyAsset(ext) {
+  for (const cat of GRAPH_ASSET_CATEGORIES) if (cat.exts.includes(ext)) return cat;
+  return { key: "other", label: "其他素材", color: "#94a3b8", role: "asset", exts: [] };
+}
+function classifyCode(ext) {
+  for (const cat of GRAPH_CODE_CATEGORIES) if (cat.exts.includes(ext)) return cat;
+  return { key: "other", label: "其他代码", color: "#64748b", role: "source", exts: [] };
+}
+
+export async function buildRelationGraph(root) {
+  const { realRoot } = await realTargetFrom(root, "");
+  const files = [];
+  let visited = 0;
+  const walk = async (dir, depth) => {
+    if (visited > 2000 || depth > 14) return;
+    visited += 1;
+    const dirents = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of dirents) {
+      const absolute = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (GRAPH_SKIP_DIRS.has(entry.name)) continue;
+        await walk(absolute, depth + 1);
+      } else if (entry.isFile()) {
+        files.push({ path: path.relative(realRoot, absolute).replace(/\\/g, "/"), name: entry.name, ext: graphExt(entry.name) });
+      }
+    }
+  };
+  await walk(realRoot, 0);
+
+  const assetFiles = [];
+  const codeFiles = [];
+  const metaFiles = [];
+  for (const f of files) {
+    if (f.ext === "meta") { metaFiles.push(f); continue; }
+    if (GRAPH_ASSET_EXTS.has(f.ext)) {
+      if (assetFiles.length < GRAPH_MAX_ASSETS) { const cat = classifyAsset(f.ext); assetFiles.push({ ...f, category: cat.key, categoryLabel: cat.label, color: cat.color, role: cat.role }); }
+    } else if (GRAPH_CODE_EXTS.has(f.ext)) {
+      if (codeFiles.length < GRAPH_MAX_CODE) { const cat = classifyCode(f.ext); codeFiles.push({ ...f, category: cat.key, categoryLabel: cat.label, color: cat.color, role: cat.role }); }
+    }
+  }
+
+  const assetByStem = new Map();
+  for (const a of assetFiles) {
+    const stem = a.name.replace(/\.[^.]+$/, "").toLowerCase();
+    if (stem.length < 3) continue;
+    if (!assetByStem.has(stem)) assetByStem.set(stem, []);
+    assetByStem.get(stem).push(a);
+  }
+  const stems = [...assetByStem.keys()];
+  const pattern = stems.length ? new RegExp(stems.map(escapeRegExp).join("|"), "g") : null;
+
+  // Unity：.meta 的 guid → 节点（素材 + 代码都索引，供「场景→脚本/材质/贴图」强关联）
+  const nodeByPath = new Map();
+  for (const cf of codeFiles) nodeByPath.set(cf.path, cf);
+  for (const a of assetFiles) nodeByPath.set(a.path, a);
+  const guidIndex = new Map();
+  for (const mf of metaFiles) {
+    const target = nodeByPath.get(mf.path.replace(/\.meta$/, ""));
+    if (!target) continue;
+    try {
+      const text = await fs.readFile(path.join(realRoot, mf.path), "utf8");
+      const m = /^guid:\s*([0-9a-fA-F]{32})/m.exec(text);
+      if (m) guidIndex.set(m[1].toLowerCase(), target);
+    } catch { /* ignore */ }
+  }
+  // 小写路径索引 → 节点，供 Addressables 按路径/地址解析
+  const pathIndex = new Map();
+  for (const [p, n] of nodeByPath) pathIndex.set(p.toLowerCase(), n);
+
+  // Unity：Resources.Load("key") → 素材路径（key 相对 Resources 目录、去扩展名）
+  const resourcesIndex = new Map();
+  for (const a of assetFiles) {
+    const marker = "/Resources/";
+    const idx = a.path.indexOf(marker);
+    if (idx < 0) continue;
+    const key = a.path.slice(idx + marker.length).replace(/\.[^.]+$/, "").toLowerCase();
+    if (key.length < 2) continue;
+    if (!resourcesIndex.has(key)) resourcesIndex.set(key, a);
+  }
+
+  // 边去重：同一对节点只保留最强的方法（guid > resources > stem）
+  const edgeMap = new Map();
+  const METHOD_RANK = { guid: 4, resources: 3, addressables: 3, stem: 1 };
+  const addEdge = (from, to, method) => {
+    if (!from || !to || from === to) return;
+    const key = `${from}::${to}`;
+    const prev = edgeMap.get(key);
+    if (!prev || METHOD_RANK[method] > METHOD_RANK[prev.method]) edgeMap.set(key, { from, to, method });
+  };
+  for (const cf of codeFiles) {
+    if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+    let content = "";
+    try {
+      const stat = await fs.stat(path.join(realRoot, cf.path));
+      if (stat.size > GRAPH_MAX_CODE_BYTES) continue;
+      content = await fs.readFile(path.join(realRoot, cf.path), "utf8");
+    } catch { continue; }
+    const lower = content.toLowerCase();
+
+    // 1) Unity GUID 强关联：代码/场景/预制/材质里出现的素材 guid
+    const guidHits = new Set();
+    const guidRe = /[0-9a-f]{32}/g;
+    let gm;
+    while ((gm = guidRe.exec(lower)) !== null && guidHits.size < 120) guidHits.add(gm[0]);
+    for (const guid of guidHits) {
+      const target = guidIndex.get(guid);
+      if (target) addEdge(cf.path, target.path, "guid");
+      if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+    }
+    if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+
+    // 2) Resources.Load 强关联
+    const resHits = new Set();
+    const resRe = /resources\.load(?:<[^>]*>)?\s*\(\s*["']([^"']+)["']/g;
+    let rm;
+    while ((rm = resRe.exec(lower)) !== null && resHits.size < 40) resHits.add(rm[1].toLowerCase());
+    for (const key of resHits) {
+      const target = resourcesIndex.get(key);
+      if (target) addEdge(cf.path, target.path, "resources");
+      if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+    }
+    if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+
+    // 2.5) Addressables 强关联：key 可为 guid / 资源路径 / 资源名
+    const addrHits = new Set();
+    const addrRe = /addressables\.(?:loadassetasync|loadassetsasync|instantiateasync|loadsceneasync)(?:<[^>]*>)?\s*\(\s*["']([^"']+)["']/g;
+    let am;
+    while ((am = addrRe.exec(lower)) !== null && addrHits.size < 40) addrHits.add(am[1]);
+    for (const key of addrHits) {
+      let target = guidIndex.get(key.toLowerCase());
+      if (!target) target = pathIndex.get(key.toLowerCase());
+      if (!target) {
+        const stem = key.split("/").pop().replace(/\.[^.]+$/, "").toLowerCase();
+        target = (assetByStem.get(stem) ?? [])[0];
+      }
+      if (target) addEdge(cf.path, target.path, "addressables");
+      if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+    }
+    if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+
+    // 3) 文件名启发式（弱关联，兜底）
+    if (pattern) {
+      const hitStems = new Set();
+      pattern.lastIndex = 0;
+      let m;
+      while ((m = pattern.exec(lower)) !== null && hitStems.size < 40) hitStems.add(m[0]);
+      for (const stem of hitStems) {
+        for (const a of assetByStem.get(stem) ?? []) {
+          addEdge(cf.path, a.path, "stem");
+          if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+        }
+        if (edgeMap.size >= GRAPH_MAX_EDGES) break;
+      }
+    }
+  }
+  const edges = [...edgeMap.values()];
+
+  const nodes = [];
+  const nodeSet = new Set();
+  for (const cf of codeFiles) { if (!nodeSet.has(cf.path)) { nodeSet.add(cf.path); nodes.push({ id: cf.path, path: cf.path, name: cf.name, role: cf.role, category: cf.category, categoryLabel: cf.categoryLabel, color: cf.color }); } }
+  for (const a of assetFiles) { if (!nodeSet.has(a.path)) { nodeSet.add(a.path); nodes.push({ id: a.path, path: a.path, name: a.name, role: "asset", category: a.category, categoryLabel: a.categoryLabel, color: a.color }); } }
+
+  // 图例：按分类定义顺序（代码在前、素材在后），只列出实际出现的分类。
+  const legend = [];
+  const legendMap = new Map();
+  for (const n of nodes) {
+    const entry = legendMap.get(n.categoryLabel) ?? { label: n.categoryLabel, color: n.color, role: n.role, count: 0 };
+    entry.count += 1;
+    legendMap.set(n.categoryLabel, entry);
+  }
+  const order = [...GRAPH_CODE_CATEGORIES.map((c) => c.label), ...GRAPH_ASSET_CATEGORIES.map((c) => c.label)];
+  legend.push(...[...legendMap.values()].sort((a, b) => {
+    const ai = order.indexOf(a.label), bi = order.indexOf(b.label);
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+  }));
+
+  return { nodes, edges, legend, truncated: visited > 800 || codeFiles.length >= GRAPH_MAX_CODE || assetFiles.length >= GRAPH_MAX_ASSETS };
+}
+
 async function revealInFinder(root, relative) {
   const { target } = await realTargetFrom(root, relative);
   await fs.access(target);
@@ -220,6 +434,24 @@ export async function writeWorkspaceText(root, relative, content, expectedMtimeM
     throw error;
   }
   await fs.writeFile(target, content, "utf8");
+  const after = await fs.stat(target);
+  return { size: after.size, mtimeMs: after.mtimeMs };
+}
+
+export async function writeWorkspaceBytes(root, relative, base64, expectedMtimeMs) {
+  if (typeof base64 !== "string" || base64.length === 0) throw new Error("invalid-content");
+  const bytes = Buffer.from(base64, "base64");
+  if (bytes.length > MAX_BINARY_BYTES) throw new Error("file-too-large");
+  const { target } = await realTargetFrom(root, relative);
+  let before = null;
+  try { before = await fs.stat(target); } catch (err) { if (err?.code !== "ENOENT") throw err; }
+  if (before && !before.isFile()) throw new Error("not-a-file");
+  if (before && typeof expectedMtimeMs === "number" && Math.abs(before.mtimeMs - expectedMtimeMs) > 1) {
+    const error = new Error("file-changed-on-disk");
+    error.code = "FILE_CHANGED";
+    throw error;
+  }
+  await fs.writeFile(target, bytes);
   const after = await fs.stat(target);
   return { size: after.size, mtimeMs: after.mtimeMs };
 }
@@ -555,6 +787,10 @@ async function handleApi(req, res) {
       json(res, 200, { ok: true, ...(await statWorkspaceFile(url.searchParams.get("root"), url.searchParams.get("path"))) });
       return;
     }
+    if (req.method === "GET" && op === "graph") {
+      json(res, 200, { ok: true, ...(await buildRelationGraph(url.searchParams.get("root"))) });
+      return;
+    }
     if (req.method === "GET" && op === "preview") {
       json(res, 200, { ok: true, ...(await previewDocument(url.searchParams.get("root"), url.searchParams.get("path"))) });
       return;
@@ -568,6 +804,12 @@ async function handleApi(req, res) {
       assertSameOrigin(req);
       const body = await readJson(req);
       json(res, 200, { ok: true, ...(await writeWorkspaceText(body.root, body.path, body.content, body.expectedMtimeMs)) });
+      return;
+    }
+    if ((req.method === "PUT" || req.method === "POST") && op === "write-bytes") {
+      assertSameOrigin(req);
+      const body = await readJson(req);
+      json(res, 200, { ok: true, ...(await writeWorkspaceBytes(body.root, body.path, body.base64, body.expectedMtimeMs)) });
       return;
     }
     if (req.method === "POST" && op === "transfer") {

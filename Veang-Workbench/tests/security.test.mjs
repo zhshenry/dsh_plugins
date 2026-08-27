@@ -42,6 +42,7 @@ test("every workspace filesystem helper goes through realTargetFrom", async () =
     "readWorkspaceText",
     "statWorkspaceFile",
     "writeWorkspaceText",
+    "writeWorkspaceBytes",
     "transferWorkspaceEntry",
     "uploadWorkspaceFile",
     "previewDocument"
@@ -191,7 +192,7 @@ test("every mutating api operation is guarded against cross-origin requests", as
   const source = await read("packages/ui/lib/index.js");
   const guarded = source.slice(source.indexOf("async function handleApi"));
   // Each state-changing branch must assert same-origin before doing work.
-  for (const op of ["reveal", "write", "transfer", "upload", "terminal"]) {
+  for (const op of ["reveal", "write", "write-bytes", "transfer", "upload", "terminal"]) {
     const branch = guarded.slice(guarded.indexOf(`op === "${op}"`));
     const body = branch.slice(0, branch.indexOf("return;"));
     assert.ok(
